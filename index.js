@@ -187,7 +187,7 @@ async function init() {
             }
         }
         
-        // --- COMMAND: /JOINVC (FIXED VERSION) ---
+        // --- COMMAND: /JOINVC (FIXED + ZOMBIE MODE) ---
         else if (command === "/joinvc") {
             const rawLink = args[1];
             if (!rawLink) return message.reply({ message: "⚠️ Usage: `/joinvc https://t.me/group`" });
@@ -245,10 +245,31 @@ async function init() {
                     // Save call object for leaving later
                     clients[i].currentCall = callObject;
 
+                    // 🔥 ZOMBIE MODE / FORCE RECONNECT LOGIC
                     if (clients[i].vcInterval) clearInterval(clients[i].vcInterval);
+
                     clients[i].vcInterval = setInterval(async () => {
-                        try { await clients[i].invoke(new Api.phone.JoinGroupCall(joinParams)); } catch (e) {} 
-                    }, 50 * 1000); 
+                        try {
+                            // 1. Check if still in VC
+                            await clients[i].invoke(new Api.phone.JoinGroupCall(joinParams));
+                            console.log(`✅ Account ${i+1} is still in VC.`);
+                        } catch (err) {
+                            // 2. If disconnected, force rejoin
+                            console.log(`⚠️ Account ${i+1} disconnected! Force rejoining...`);
+                            try {
+                                const me = await clients[i].getMe();
+                                await clients[i].invoke(new Api.phone.JoinGroupCall({
+                                    call: callObject,
+                                    joinAs: me,
+                                    params: new Api.DataJSON({ data: JSON.stringify({ ssrc: Math.floor(Math.random() * 100000000) }) }),
+                                    muted: true
+                                }));
+                                console.log(`🚀 Account ${i+1} Force Rejoined successfully!`);
+                            } catch (rejoinErr) {
+                                // Ignore error and try again next loop
+                            }
+                        }
+                    }, 10000); // 10 Seconds loop for fast reconnect
 
                     await new Promise(r => setTimeout(r, joinDelay)); 
                 } catch (e) { 
