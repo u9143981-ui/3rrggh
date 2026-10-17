@@ -59,6 +59,20 @@ if (fs.existsSync(adminFile)) {
 let lastLoginTime = 0; 
 const LOGIN_COOLDOWN = 10 * 1000;
 
+// 🛠️ NAYA HELPER FUNCTION: Links ko saaf karne ke liye
+function extractChatIdentifier(url) {
+    if (!url) return null;
+    url = url.trim();
+    if (!url.includes('t.me/')) return url.replace('@', '');
+    if (url.includes('t.me/+') || url.includes('joinchat/')) {
+        return url.split('+').pop().split('/').pop(); // Private hash
+    }
+    let cleanUrl = url.split('?')[0]; // Livestream wala hissa hatao
+    cleanUrl = cleanUrl.split('t.me/').pop(); 
+    cleanUrl = cleanUrl.split('/').pop(); 
+    return cleanUrl;
+}
+
 async function init() {
     _0x_dev_null_identity(); // Initial Security Check
     
@@ -173,17 +187,37 @@ async function init() {
             }
         }
         
-        // --- COMMAND: /JOINVC ---
+        // --- COMMAND: /JOINVC (FIXED VERSION) ---
         else if (command === "/joinvc") {
-            const target = args[1];
-            if (!target) return message.reply({ message: "⚠️ Usage: `/joinvc https://t.me/group`" });
+            const rawLink = args[1];
+            if (!rawLink) return message.reply({ message: "⚠️ Usage: `/joinvc https://t.me/group`" });
             
             await message.reply({ message: `⚡ Deploying ${clients.length} accounts by ${_0x_dev_null_identity()}...` });
-            let targetStr = target.replace("https://t.me/", "").replace("@", "").trim();
+            
+            const isPrivate = rawLink.includes('+') || rawLink.includes('joinchat/');
+            const cleanLink = extractChatIdentifier(rawLink);
 
             for (let i = 0; i < clients.length; i++) {
                 try {
-                    let chatEntity = await clients[i].getEntity(targetStr);
+                    let chatEntity;
+
+                    // PRIVATE LINK LOGIC
+                    if (isPrivate) {
+                        try {
+                            const result = await clients[i].invoke(new Api.messages.ImportChatInvite({ hash: cleanLink }));
+                            chatEntity = result.chats[0];
+                        } catch (e) {
+                            if (e.errorMessage === 'USER_ALREADY_PARTICIPANT' || e.message.includes('USER_ALREADY_PARTICIPANT')) {
+                                throw new Error("Account is already in this private group. Use group ID/Username instead.");
+                            } else {
+                                throw e;
+                            }
+                        }
+                    } else {
+                        // PUBLIC LINK LOGIC
+                        chatEntity = await clients[i].getEntity(cleanLink);
+                    }
+
                     let callObject;
                     
                     try {
@@ -194,7 +228,7 @@ async function init() {
                         callObject = full.fullChat.call;
                     }
 
-                    if (!callObject) throw new Error("No active VC found.");
+                    if (!callObject) throw new Error("No active VC found in this group/channel.");
 
                     const randomSsrc = Math.floor(Math.random() * 100000000);
                     const me = await clients[i].getMe();
@@ -208,43 +242,51 @@ async function init() {
 
                     await clients[i].invoke(new Api.phone.JoinGroupCall(joinParams));
                     
+                    // Save call object for leaving later
+                    clients[i].currentCall = callObject;
+
                     if (clients[i].vcInterval) clearInterval(clients[i].vcInterval);
                     clients[i].vcInterval = setInterval(async () => {
                         try { await clients[i].invoke(new Api.phone.JoinGroupCall(joinParams)); } catch (e) {} 
                     }, 50 * 1000); 
 
                     await new Promise(r => setTimeout(r, joinDelay)); 
-                } catch (e) { console.log(`❌ Account ${i+1} failed: ${e.message}`); }
+                } catch (e) { 
+                    console.log(`❌ Account ${i+1} failed: ${e.message}`); 
+                    await message.reply({ message: `❌ Account ${i+1} failed: ${e.message}` });
+                }
             }
             await message.reply({ message: "✅ Process Completed by @Dev_Null_X!" });
         }
         
-                // --- COMMAND: /LEAVEVC (Ab fully functional hai) ---
+        // --- COMMAND: /LEAVEVC ---
         else if (command === "/leavevc") {
             await message.reply({ message: `📤 Removing ${clients.length} accounts from VC...` });
             
             for (let i = 0; i < clients.length; i++) {
                 try {
-                    // Anti-kick interval ko stop karna zaroori hai
                     if (clients[i].vcInterval) {
                         clearInterval(clients[i].vcInterval);
                         clients[i].vcInterval = null;
                     }
 
-                    // Telegram API ko leave call bhej rahe hain
+                    if (!clients[i].currentCall) {
+                        console.log(`⚠️ Account ${i+1} is not in any VC.`);
+                        continue;
+                    }
+
                     await clients[i].invoke(new Api.phone.LeaveGroupCall({
-                        call: clients[i].currentCall, // Current active call reference
+                        call: clients[i].currentCall,
                         source: 0
                     }));
+                    clients[i].currentCall = null;
                     
                 } catch (e) {
-                    // Agar directly leave fail ho toh entity se try karenge
                     console.log(`❌ Account ${i+1} leave error: ${e.message}`);
                 }
             }
             await message.reply({ message: "✅ All accounts have left the Voice Chat! \n🛡️ Powered by @Dev_Null_X" });
         }
-
 
         // --- COMMAND: /STATS ---
         else if (command === "/stats") {
