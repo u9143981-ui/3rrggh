@@ -11,10 +11,10 @@ module.exports = {
  
  //apna dalo 👆👆👆API HASH  AND APIID
     // [🤖] Bot Control Settings (@BotFather)
-    botToken: "8790216451:AAHXoH3PSsaP85s59-ff1E", 
+    botToken: "8862389919:AAG-zWbqshCDAIbmWnvriAVJGpYp50Dyuq8", 
 
     // [👤] Owner Identity (Only this ID can control the bot)
-    adminId: "7967846199", 
+    adminId: "7589355685", 
 
     // [⏳] Safety Settings (Do NOT reduce for account safety)
     joinDelay: 5000, // 5 Seconds gap between account joins
