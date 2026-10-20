@@ -1,7 +1,6 @@
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   🚫 COPYRIGHT & AUTHORSHIP WARNING 🚫
   Developer: @Dev_Null_X (Telegram)
-  Brand: Node.js India Developers
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 */
 
@@ -32,7 +31,7 @@ if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir);
 
 let clients = [];
 let pendingLogins = {};
-let waitingForFile = {}; // Track karega kaun file bhej raha hai
+let waitingForFile = {}; 
 
 const adminFile = "./admins.json";
 let adminList = [];
@@ -76,7 +75,6 @@ async function init() {
     await botClient.start({ botAuthToken: botToken });
     console.log("Control Bot Online!");
 
-    // Helper function for welcome message
     const getWelcomeMsg = () => {
         return "Welcome Boss! I am VC Manager.\n\n" +
                "Admin Commands:\n" +
@@ -97,15 +95,13 @@ async function init() {
         const senderId = message.senderId ? message.senderId.toString() : "unknown";
         if (!adminList.includes(senderId)) return message.reply({ message: "Access Denied!" });
 
-        // Check if user is sending a file after being prompted by /seslog
+        // FILE UPLOAD LOGIC
         if (waitingForFile[senderId]) {
-            // Agar user cancel karna chahta hai
             if (message.text && message.text.toLowerCase() === "/sescancel") {
                 delete waitingForFile[senderId];
                 return message.reply({ message: "File upload cancelled successfully." });
             }
 
-            // Agar message media (file) hai
             if (message.media && message.media.document) {
                 const fileName = message.media.document.attributes.find(a => a.className === 'DocumentAttributeFilename')?.fileName || "file";
                 
@@ -114,7 +110,7 @@ async function init() {
                 }
 
                 await message.reply({ message: "File received. Processing... Please wait." });
-                delete waitingForFile[senderId]; // Clear state
+                delete waitingForFile[senderId];
 
                 try {
                     const buffer = await message.downloadMedia();
@@ -151,12 +147,11 @@ async function init() {
                 }
                 return;
             } else {
-                // Agar file nahi bheji par kuch aur type kar diya
                 return message.reply({ message: "Please send a valid .session or .zip file, or type /sescancel to stop." });
             }
         }
 
-        // Normal command handling
+        // NORMAL COMMANDS
         if (!message.text) return;
         const args = message.text.split(" ");
         const command = args[0].toLowerCase();
