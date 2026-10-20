@@ -1,29 +1,14 @@
 {
-  "name": "dev-null-x-vc-bot",
+  "name": "telegram-vc-bot",
   "version": "1.0.0",
-  "description": "Professional Multi-Account Telegram VC Joiner by @Dev_Null_X 🇮🇳",
+  "description": "Telegram Multi-Account VC Joiner",
   "main": "index.js",
-  "author": "@Dev_Null_X (Node.js India Developers)",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "telegram": "^2.22.2",
-    "input": "^1.0.1",
-    "fs": "0.0.1-security",
-    "express": "^4.18.2"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://www.youtube.com/@Dev_Null_X"
-  },
-  "keywords": [
-    "nodejs",
-    "telegram",
-    "vc-joiner",
-    "automation",
-    "dev-null-x",
-    "india"
-  ],
-  "license": "ISC"
+    "adm-zip": "^0.5.16",
+    "express": "^4.19.2",
+    "telegram": "^2.22.2"
+  }
 }
