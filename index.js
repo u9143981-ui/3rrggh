@@ -81,7 +81,7 @@ async function init() {
                "/login +91xxxx - Add Single Account (OTP)\n" +
                "/seslog - Upload .session or .zip file to auto-login\n" +
                "/sescancel - Cancel file upload process\n" +
-               "/getsession - Download all sessions as .zip\n" +
+               "/getsession - Download all sessions (Auto Zip if >1)\n" +
                "/joinvc [link] - Join All accounts to VC\n" +
                "/leavevc - Leave All accounts from VC\n" +
                "/stats - Check active accounts\n\n" +
@@ -95,7 +95,7 @@ async function init() {
         const senderId = message.senderId ? message.senderId.toString() : "unknown";
         if (!adminList.includes(senderId)) return message.reply({ message: "Access Denied!" });
 
-        // FILE UPLOAD LOGIC
+        // FILE UPLOAD LOGIC (SESLOG)
         if (waitingForFile[senderId]) {
             if (message.text && message.text.toLowerCase() === "/sescancel") {
                 delete waitingForFile[senderId];
@@ -199,7 +199,7 @@ async function init() {
         }
 
         else if (command === "/otp") {
-            const otp = args.slice(1).join("").replace(/[^0-9]/g, ''); 
+            const otp = args.slice(1).join("").replace(/[^0-9]/g, '');
             if (pendingLogins[senderId]?.resolveOtp) pendingLogins[senderId].resolveOtp(otp); 
         }
 
@@ -207,17 +207,37 @@ async function init() {
             if (pendingLogins[senderId]?.resolvePass) pendingLogins[senderId].resolvePass(args[1]);
         }
 
+        // --- FIXED GETSESSION COMMAND ---
         else if (command === "/getsession") {
             const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.session'));
             if (files.length === 0) return message.reply({ message: "No accounts found to backup." });
 
-            const zip = new AdmZip();
-            for (const file of files) zip.addLocalFile(path.join(sessionDir, file));
-            
-            await botClient.sendFile(message.chatId, {
-                file: zip.toBuffer(),
-                caption: "All Sessions (" + files.length + ")\n\nKeep this file safe!"
-            });
+            if (files.length === 1) {
+                // Agar 1 hi account hai toh seedha .session file bhejega
+                const filePath = path.join(sessionDir, files[0]);
+                await botClient.sendFile(message.chatId, {
+                    file: filePath,
+                    caption: "Single Session Backup\nKeep this file safe!",
+                    forceDocument: true
+                });
+            } else {
+                // Agar 1 se zyada hain toh proper zip file bhejega
+                const zip = new AdmZip();
+                for (const file of files) {
+                    zip.addLocalFile(path.join(sessionDir, file));
+                }
+                const zipPath = path.join(__dirname, "All_Accounts.zip");
+                zip.writeZip(zipPath); 
+                
+                await botClient.sendFile(message.chatId, {
+                    file: zipPath,
+                    caption: "All Sessions (" + files.length + ")\nKeep this file safe!",
+                    forceDocument: true
+                });
+
+                // 5 second baad temporary zip file delete kar dega
+                setTimeout(() => { if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath); }, 5000);
+            }
         }
         
         else if (command === "/joinvc") {
