@@ -1,13 +1,7 @@
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   🚫 COPYRIGHT & AUTHORSHIP WARNING 🚫
-  
   Developer: @Dev_Null_X (Telegram)
   Brand: Node.js India Developers 🇮🇳
-  YouTube: https://www.youtube.com/@Dev_Null_X
-  
-  WARNING: Removing or modifying this authorship header is a 
-  violation of the developer's rights. This script is protected 
-  under the @Dev_Null_X Open-Source License.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 */
 
@@ -15,40 +9,32 @@ const { TelegramClient, Api } = require("telegram");
 const { StringSession } = require("telegram/sessions");
 const { NewMessage } = require("telegram/events");
 const fs = require("fs");
+const path = require("path");
+const AdmZip = require("adm-zip");
 const config = require("./config.js");
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// 🔥 CORE PROTECTION: Identity check function
 const _0x_dev_null_identity = () => {
     const brand = "@Dev_Null_X";
-    if (brand !== "@Dev_Null_X") { 
-        console.error("❌ ILLEGAL MODIFICATION DETECTED: PLEASE RE-DOWNLOAD FROM @Dev_Null_X");
-        process.exit(1); 
-    }
+    if (brand !== "@Dev_Null_X") { process.exit(1); }
     return brand;
 };
 
-app.get('/', (req, res) => {
-  res.send(`${_0x_dev_null_identity()} VC Bot is running safely! 🚀`);
-});
+app.get('/', (req, res) => res.send(`${_0x_dev_null_identity()} VC Bot is running safely! 🚀`));
+app.listen(port, () => console.log(`[⚡] System active on port ${port}`));
 
-app.listen(port, () => {
-  console.log(`[⚡] System active on port ${port} | Brand: ${_0x_dev_null_identity()}`);
-});
+const { apiId, apiHash, botToken, adminId, joinDelay } = config;
 
-const { apiId, apiHash, botToken, adminId, sessionFile, joinDelay } = config;
+const sessionDir = "./sessions";
+if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir);
 
-if (!fs.existsSync(sessionFile)) fs.writeFileSync(sessionFile, "[]");
-let savedSessions = JSON.parse(fs.readFileSync(sessionFile));
 let clients = [];
 let pendingLogins = {};
 
-// ADMIN SYSTEM SETUP
 const adminFile = "./admins.json";
 let adminList = [];
-
 if (fs.existsSync(adminFile)) {
     adminList = JSON.parse(fs.readFileSync(adminFile));
 } else {
@@ -59,167 +45,186 @@ if (fs.existsSync(adminFile)) {
 let lastLoginTime = 0; 
 const LOGIN_COOLDOWN = 10 * 1000;
 
-// 🛠️ NAYA HELPER FUNCTION: Links ko saaf karne ke liye
 function extractChatIdentifier(url) {
     if (!url) return null;
     url = url.trim();
     if (!url.includes('t.me/')) return url.replace('@', '');
-    if (url.includes('t.me/+') || url.includes('joinchat/')) {
-        return url.split('+').pop().split('/').pop(); // Private hash
-    }
-    let cleanUrl = url.split('?')[0]; // Livestream wala hissa hatao
-    cleanUrl = cleanUrl.split('t.me/').pop(); 
-    cleanUrl = cleanUrl.split('/').pop(); 
-    return cleanUrl;
+    if (url.includes('t.me/+') || url.includes('joinchat/')) return url.split('+').pop().split('/').pop();
+    let cleanUrl = url.split('?')[0]; 
+    return cleanUrl.split('t.me/').pop().split('/').pop(); 
 }
 
-async function init() {
-    _0x_dev_null_identity(); // Initial Security Check
-    
-    console.log("\x1b[36m%s\x1b[0m", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.log("\x1b[32m%s\x1b[0m", "🚀  SYSTEM BOOTING: " + _0x_dev_null_identity() + " VC MANAGER ");
-    console.log("\x1b[33m%s\x1b[0m", "🇮🇳  NODE.JS INDIA DEVELOPERS HUB ACTIVE     ");
-    console.log("\x1b[36m%s\x1b[0m", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-
-    for (const sessionStr of savedSessions) {
+async function loadAllSessions() {
+    const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.session'));
+    for (const file of files) {
         try {
+            const sessionStr = fs.readFileSync(path.join(sessionDir, file), 'utf8').trim();
+            if (!sessionStr) continue;
             const client = new TelegramClient(new StringSession(sessionStr), apiId, apiHash, { connectionRetries: 5 });
             await client.connect();
             clients.push(client);
-        } catch (e) { console.log("⚠️ Failed session."); }
+        } catch (e) { console.log(`⚠️ Failed to load: ${file}`); }
     }
+}
+
+async function init() {
+    console.log("\x1b[32m%s\x1b[0m", "🚀  SYSTEM BOOTING: " + _0x_dev_null_identity() + " VC MANAGER ");
+    await loadAllSessions();
 
     const botClient = new TelegramClient(new StringSession(""), apiId, apiHash, { connectionRetries: 5 });
     await botClient.start({ botAuthToken: botToken });
-    console.log(`🤖 Control Bot Online! Credit: ${_0x_dev_null_identity()}`);
+    console.log(`🤖 Control Bot Online!`);
 
     botClient.addEventHandler(async (event) => {
         const message = event.message;
         if (!message || !message.text) return;
 
         const senderId = message.senderId ? message.senderId.toString() : "unknown";
-        
-        if (!adminList.includes(senderId)) {
-            return message.reply({ message: `⛔ Access Denied! Only ${_0x_dev_null_identity()} and admins can control me.` });
-        }
+        if (!adminList.includes(senderId)) return message.reply({ message: `⛔ Access Denied!` });
 
         const args = message.text.split(" ");
         const command = args[0].toLowerCase();
 
-        // --- COMMAND: /START ---
+        // --- /START ---
         if (command === "/start") {
             await message.reply({ 
-                message: `👋 Welcome Boss! I am ${_0x_dev_null_identity()} VC Manager.\n\n` +
-                         "🛠 **Admin Commands:**\n" +
-                         "🔹 `/login +91xxxx` - Add Account\n" +
-                         "🔹 `/otp 12 345` - Verify OTP\n" +
-                         "🔹 `/pass password` - 2FA Login\n" +
+                message: `👋 Welcome Boss!\n\n` +
+                         "🔹 `/login +91xxxx` - Add Single Account (OTP)\n" +
+                         "🔹 `/seslog` - Reply to .session or .zip file to auto-login\n" +
+                         "🔹 `/getsession` - Get all sessions as .zip\n" +
                          "🔹 `/joinvc [link]` - Join All to VC\n" +
-                         "🔹 `/leavevc [link]` - Leave All VC\n" +
-                         "🔹 `/addadmin [ID]` - Add New Admin\n" +
-                         "🔹 `/stats` - Check Active Accounts\n\n" +
-                         "🇮🇳 **Developed by @Dev_Null_X**",
-                file: "https://files.catbox.moe/dkxoeu.jpg"
+                         "🔹 `/leavevc` - Leave All VC\n" +
+                         "🔹 `/stats` - Check Stats`
             });
         }
 
-        // --- COMMAND: /ADDADMIN ---
-        else if (command === "/addadmin") {
-            const newAdmin = args[1];
-            if (!newAdmin) return message.reply({ message: "⚠️ Usage: `/addadmin 123456789`" });
-            if (adminList.includes(newAdmin)) return message.reply({ message: "⚠️ Already an admin." });
+        // --- /SESLOG (SESSION FILE / ZIP UPLOAD) ---
+        else if (command === "/seslog") {
+            if (!message.media || !message.media.document) {
+                return message.reply({ message: "⚠️ Kisi .session ya .zip file ko reply karke /seslog likho." });
+            }
 
-            adminList.push(newAdmin);
-            fs.writeFileSync(adminFile, JSON.stringify(adminList));
-            await message.reply({ message: `✅ New admin authorized: \`${newAdmin}\`` });
+            const fileName = message.media.document.attributes.find(a => a.className === 'DocumentAttributeFilename')?.fileName || "file";
+            await message.reply({ message: "⏳ File process ho rahi hai..." });
+
+            try {
+                const buffer = await message.downloadMedia();
+                const filesToLoad = [];
+
+                if (fileName.endsWith('.session')) {
+                    filesToLoad.push({ name: fileName, data: buffer.toString('utf8') });
+                } else if (fileName.endsWith('.zip')) {
+                    const zip = new AdmZip(buffer);
+                    for (const entry of zip.getEntries()) {
+                        if (entry.entryName.endsWith('.session')) {
+                            filesToLoad.push({ name: entry.entryName, data: entry.getData().toString('utf8') });
+                        }
+                    }
+                } else {
+                    return message.reply({ message: "❌ Sirf .session ya .zip file allowed hai." });
+                }
+
+                let loadedCount = 0;
+                for (const file of filesToLoad) {
+                    const tempClient = new TelegramClient(new StringSession(file.data.trim()), apiId, apiHash, { connectionRetries: 1 });
+                    try {
+                        await tempClient.connect();
+                        const me = await tempClient.getMe();
+                        const cleanPhone = me.phone ? me.phone.toString() : "Unknown";
+                        const newFileName = `Account ${clients.length + 1} [${cleanPhone}].session`;
+                        
+                        fs.writeFileSync(path.join(sessionDir, newFileName), tempClient.session.save());
+                        clients.push(tempClient);
+                        loadedCount++;
+                    } catch (e) {
+                        console.log(`❌ Failed to load session: ${file.name} - ${e.message}`);
+                    }
+                }
+                await message.reply({ message: `✅ ${loadedCount} sessions successfully load ho gaye!\nAb inpe OTP nahi lagega.` });
+            } catch (e) {
+                await message.reply({ message: "❌ Error: " + e.message });
+            }
         }
 
-        // --- COMMAND: /LOGIN ---
+        // --- /LOGIN (FRESH OTP) ---
         else if (command === "/login") {
             const phone = args[1];
             if (!phone) return message.reply({ message: "⚠️ Usage: `/login +91xxxxxxx`" });
-
-            const currentTime = Date.now();
-            if (currentTime - lastLoginTime < LOGIN_COOLDOWN) {
-                const timeLeft = Math.ceil((LOGIN_COOLDOWN - (currentTime - lastLoginTime)) / 1000);
-                return message.reply({ message: `⏳ Security Cool-down! Please wait ${timeLeft}s.` });
-            }
-
             if (pendingLogins[senderId]) return message.reply({ message: "⚠️ Login already in progress." });
 
-            await message.reply({ message: "📡 Connecting to Telegram Servers..." });
+            await message.reply({ message: "📡 Connecting..." });
             const tempClient = new TelegramClient(new StringSession(""), apiId, apiHash, { connectionRetries: 1 });
             pendingLogins[senderId] = { client: tempClient, phone: phone };
 
             tempClient.start({
                 phoneNumber: phone,
                 phoneCode: async () => {
-                    await message.reply({ message: `📩 OTP Sent to ${phone}.\nReply: \`/otp 12 345\`` });
+                    await message.reply({ message: `📩 OTP Sent.\nReply: \`/otp 12 345\`` });
                     pendingLogins[senderId].otpPromise = new Promise(resolve => pendingLogins[senderId].resolveOtp = resolve);
                     return await pendingLogins[senderId].otpPromise;
                 },
                 password: async () => {
-                    await message.reply({ message: "🔐 2FA Detected. Reply: \`/pass your_password\`" });
+                    await message.reply({ message: "🔐 2FA Detected. Reply: \`/pass password\`" });
                     pendingLogins[senderId].passPromise = new Promise(resolve => pendingLogins[senderId].resolvePass = resolve);
                     return await pendingLogins[senderId].passPromise;
                 }
             }).then(async () => {
-                await saveAccount(tempClient, message);
+                await saveAccount(tempClient, phone, message);
             }).catch(async (err) => {
                 await message.reply({ message: "❌ Login Failed: " + err.message });
                 delete pendingLogins[senderId];
             });
         }
 
-        // --- COMMAND: /OTP ---
         else if (command === "/otp") {
             const otp = args.slice(1).join("").replace(/[^0-9]/g, ''); 
-            const data = pendingLogins[senderId];
-            if (!data || !data.resolveOtp) return message.reply({ message: "❌ Use /login first." });
-            data.resolveOtp(otp); 
+            if (pendingLogins[senderId]?.resolveOtp) pendingLogins[senderId].resolveOtp(otp); 
         }
 
         else if (command === "/pass") {
-            const pass = args[1];
-            if (pendingLogins[senderId]?.resolvePass) {
-                await message.reply({ message: "⏳ Verifying Password..." });
-                pendingLogins[senderId].resolvePass(pass);
-            }
+            if (pendingLogins[senderId]?.resolvePass) pendingLogins[senderId].resolvePass(args[1]);
+        }
+
+        // --- /GETSESSION (DOWNLOAD ZIP) ---
+        else if (command === "/getsession") {
+            const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.session'));
+            if (files.length === 0) return message.reply({ message: "❌ Koi account nahi hai." });
+
+            const zip = new AdmZip();
+            for (const file of files) zip.addLocalFile(path.join(sessionDir, file));
+            
+            await botClient.sendFile(message.chatId, {
+                file: zip.toBuffer(),
+                caption: `🔐 **All Sessions (${files.length})**\n\n⚠️ Isko sambhal ke rakho!`
+            });
         }
         
-        // --- COMMAND: /JOINVC (FIXED + ZOMBIE MODE) ---
+        // --- /JOINVC ---
         else if (command === "/joinvc") {
             const rawLink = args[1];
-            if (!rawLink) return message.reply({ message: "⚠️ Usage: `/joinvc https://t.me/group`" });
+            if (!rawLink) return message.reply({ message: "⚠️ Usage: `/joinvc link`" });
+            if (clients.length === 0) return message.reply({ message: "❌ No accounts loaded." });
             
-            await message.reply({ message: `⚡ Deploying ${clients.length} accounts by ${_0x_dev_null_identity()}...` });
-            
+            await message.reply({ message: `⚡ Deploying ${clients.length} accounts...` });
             const isPrivate = rawLink.includes('+') || rawLink.includes('joinchat/');
             const cleanLink = extractChatIdentifier(rawLink);
 
             for (let i = 0; i < clients.length; i++) {
                 try {
                     let chatEntity;
-
-                    // PRIVATE LINK LOGIC
                     if (isPrivate) {
                         try {
                             const result = await clients[i].invoke(new Api.messages.ImportChatInvite({ hash: cleanLink }));
                             chatEntity = result.chats[0];
                         } catch (e) {
-                            if (e.errorMessage === 'USER_ALREADY_PARTICIPANT' || e.message.includes('USER_ALREADY_PARTICIPANT')) {
-                                throw new Error("Account is already in this private group. Use group ID/Username instead.");
-                            } else {
-                                throw e;
-                            }
+                            if (e.errorMessage === 'USER_ALREADY_PARTICIPANT' || e.message.includes('USER_ALREADY_PARTICIPANT')) throw new Error("Already in group");
+                            else throw e;
                         }
                     } else {
-                        // PUBLIC LINK LOGIC
                         chatEntity = await clients[i].getEntity(cleanLink);
                     }
 
                     let callObject;
-                    
                     try {
                         const full = await clients[i].invoke(new Api.channels.GetFullChannel({ channel: chatEntity }));
                         callObject = full.fullChat.call;
@@ -228,103 +233,69 @@ async function init() {
                         callObject = full.fullChat.call;
                     }
 
-                    if (!callObject) throw new Error("No active VC found in this group/channel.");
-
-                    const randomSsrc = Math.floor(Math.random() * 100000000);
-                    const me = await clients[i].getMe();
+                    if (!callObject) throw new Error("No active VC found.");
 
                     const joinParams = {
                         call: callObject,
-                        joinAs: me,
-                        params: new Api.DataJSON({ data: JSON.stringify({ ssrc: randomSsrc }) }),
+                        joinAs: await clients[i].getMe(),
+                        params: new Api.DataJSON({ data: JSON.stringify({ ssrc: Math.floor(Math.random() * 100000000) }) }),
                         muted: true
                     };
 
                     await clients[i].invoke(new Api.phone.JoinGroupCall(joinParams));
-                    
-                    // Save call object for leaving later
                     clients[i].currentCall = callObject;
 
-                    // 🔥 ZOMBIE MODE / FORCE RECONNECT LOGIC
                     if (clients[i].vcInterval) clearInterval(clients[i].vcInterval);
-
                     clients[i].vcInterval = setInterval(async () => {
                         try {
-                            // 1. Check if still in VC
                             await clients[i].invoke(new Api.phone.JoinGroupCall(joinParams));
-                            console.log(`✅ Account ${i+1} is still in VC.`);
                         } catch (err) {
-                            // 2. If disconnected, force rejoin
-                            console.log(`⚠️ Account ${i+1} disconnected! Force rejoining...`);
                             try {
-                                const me = await clients[i].getMe();
                                 await clients[i].invoke(new Api.phone.JoinGroupCall({
-                                    call: callObject,
-                                    joinAs: me,
-                                    params: new Api.DataJSON({ data: JSON.stringify({ ssrc: Math.floor(Math.random() * 100000000) }) }),
-                                    muted: true
+                                    call: callObject, joinAs: await clients[i].getMe(),
+                                    params: new Api.DataJSON({ data: JSON.stringify({ ssrc: Math.floor(Math.random() * 100000000) }) }), muted: true
                                 }));
-                                console.log(`🚀 Account ${i+1} Force Rejoined successfully!`);
-                            } catch (rejoinErr) {
-                                // Ignore error and try again next loop
-                            }
+                            } catch (e) {}
                         }
-                    }, 10000); // 10 Seconds loop for fast reconnect
+                    }, 10000);
 
                     await new Promise(r => setTimeout(r, joinDelay)); 
-                } catch (e) { 
-                    console.log(`❌ Account ${i+1} failed: ${e.message}`); 
-                    await message.reply({ message: `❌ Account ${i+1} failed: ${e.message}` });
-                }
+                } catch (e) { console.log(`❌ Acc ${i+1}: ${e.message}`); }
             }
-            await message.reply({ message: "✅ Process Completed by @Dev_Null_X!" });
+            await message.reply({ message: "✅ Process Completed!" });
         }
         
-        // --- COMMAND: /LEAVEVC ---
+        // --- /LEAVEVC ---
         else if (command === "/leavevc") {
-            await message.reply({ message: `📤 Removing ${clients.length} accounts from VC...` });
-            
             for (let i = 0; i < clients.length; i++) {
                 try {
-                    if (clients[i].vcInterval) {
-                        clearInterval(clients[i].vcInterval);
-                        clients[i].vcInterval = null;
+                    if (clients[i].vcInterval) { clearInterval(clients[i].vcInterval); clients[i].vcInterval = null; }
+                    if (clients[i].currentCall) {
+                        await clients[i].invoke(new Api.phone.LeaveGroupCall({ call: clients[i].currentCall, source: 0 }));
+                        clients[i].currentCall = null;
                     }
-
-                    if (!clients[i].currentCall) {
-                        console.log(`⚠️ Account ${i+1} is not in any VC.`);
-                        continue;
-                    }
-
-                    await clients[i].invoke(new Api.phone.LeaveGroupCall({
-                        call: clients[i].currentCall,
-                        source: 0
-                    }));
-                    clients[i].currentCall = null;
-                    
-                } catch (e) {
-                    console.log(`❌ Account ${i+1} leave error: ${e.message}`);
-                }
+                } catch (e) {}
             }
-            await message.reply({ message: "✅ All accounts have left the Voice Chat! \n🛡️ Powered by @Dev_Null_X" });
+            await message.reply({ message: "✅ All left VC." });
         }
 
-        // --- COMMAND: /STATS ---
+        // --- /STATS ---
         else if (command === "/stats") {
-            await message.reply({ message: `📊 **${_0x_dev_null_identity()} System Stats**\n\n✅ **Active Accounts:** ${clients.length}\n🇮🇳 **Region:** India\n🛡 **Status:** Secured` });
+            const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.session'));
+            await message.reply({ message: `📊 **Stats**\nTotal Sessions: ${files.length}\nActive Clients: ${clients.length}` });
         }
         
     }, new NewMessage({ incoming: true }));
 }
 
-async function saveAccount(client, message) {
+async function saveAccount(client, phone, message) {
     const sessionStr = client.session.save();
-    savedSessions.push(sessionStr);
-    fs.writeFileSync(sessionFile, JSON.stringify(savedSessions));
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const fileName = `Account ${clients.length + 1} [${cleanPhone}].session`;
+    fs.writeFileSync(path.join(sessionDir, fileName), sessionStr);
     clients.push(client);
     lastLoginTime = Date.now();
-    
-    await message.reply({ message: `✅ Account linked to ${_0x_dev_null_identity()} successfully!` });
+    await message.reply({ message: `✅ Account linked!\nFile: \`${fileName}\`` });
     if (message.senderId) delete pendingLogins[message.senderId.toString()];
 }
 
