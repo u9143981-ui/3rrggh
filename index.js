@@ -63,49 +63,47 @@ async function loadAllSessions() {
             const client = new TelegramClient(new StringSession(sessionStr), apiId, apiHash, { connectionRetries: 5 });
             await client.connect();
             clients.push(client);
-        } catch (e) { console.log(`⚠️ Failed to load: ${file}`); }
+        } catch (e) { console.log("Failed to load: " + file); }
     }
 }
 
 async function init() {
-    console.log("\x1b[32m%s\x1b[0m", "🚀  SYSTEM BOOTING: " + _0x_dev_null_identity() + " VC MANAGER ");
+    console.log("SYSTEM BOOTING: " + _0x_dev_null_identity() + " VC MANAGER");
     await loadAllSessions();
 
     const botClient = new TelegramClient(new StringSession(""), apiId, apiHash, { connectionRetries: 5 });
     await botClient.start({ botAuthToken: botToken });
-    console.log(`🤖 Control Bot Online!`);
+    console.log("Control Bot Online!");
 
     botClient.addEventHandler(async (event) => {
         const message = event.message;
         if (!message || !message.text) return;
 
         const senderId = message.senderId ? message.senderId.toString() : "unknown";
-        if (!adminList.includes(senderId)) return message.reply({ message: `⛔ Access Denied!` });
+        if (!adminList.includes(senderId)) return message.reply({ message: "Access Denied!" });
 
         const args = message.text.split(" ");
         const command = args[0].toLowerCase();
 
-        // --- /START ---
         if (command === "/start") {
             await message.reply({ 
-                message: `👋 Welcome Boss!\n\n` +
-                         "🔹 `/login +91xxxx` - Add Single Account (OTP)\n" +
-                         "🔹 `/seslog` - Reply to .session or .zip file to auto-login\n" +
-                         "🔹 `/getsession` - Get all sessions as .zip\n" +
-                         "🔹 `/joinvc [link]` - Join All to VC\n" +
-                         "🔹 `/leavevc` - Leave All VC\n" +
-                         "🔹 `/stats` - Check Stats`
+                message: "Welcome Boss!\n\n" +
+                         "/login +91xxxx - Add Single Account (OTP)\n" +
+                         "/seslog - Reply to .session or .zip file to auto-login\n" +
+                         "/getsession - Get all sessions as .zip\n" +
+                         "/joinvc [link] - Join All to VC\n" +
+                         "/leavevc - Leave All VC\n" +
+                         "/stats - Check Stats"
             });
         }
 
-        // --- /SESLOG (SESSION FILE / ZIP UPLOAD) ---
         else if (command === "/seslog") {
             if (!message.media || !message.media.document) {
-                return message.reply({ message: "⚠️ Kisi .session ya .zip file ko reply karke /seslog likho." });
+                return message.reply({ message: "Reply to a .session or .zip file with /seslog" });
             }
 
             const fileName = message.media.document.attributes.find(a => a.className === 'DocumentAttributeFilename')?.fileName || "file";
-            await message.reply({ message: "⏳ File process ho rahi hai..." });
+            await message.reply({ message: "File process ho rahi hai..." });
 
             try {
                 const buffer = await message.downloadMedia();
@@ -121,7 +119,7 @@ async function init() {
                         }
                     }
                 } else {
-                    return message.reply({ message: "❌ Sirf .session ya .zip file allowed hai." });
+                    return message.reply({ message: "Sirf .session ya .zip file allowed hai." });
                 }
 
                 let loadedCount = 0;
@@ -131,47 +129,46 @@ async function init() {
                         await tempClient.connect();
                         const me = await tempClient.getMe();
                         const cleanPhone = me.phone ? me.phone.toString() : "Unknown";
-                        const newFileName = `Account ${clients.length + 1} [${cleanPhone}].session`;
+                        const newFileName = "Account " + (clients.length + 1) + " [" + cleanPhone + "].session";
                         
                         fs.writeFileSync(path.join(sessionDir, newFileName), tempClient.session.save());
                         clients.push(tempClient);
                         loadedCount++;
                     } catch (e) {
-                        console.log(`❌ Failed to load session: ${file.name} - ${e.message}`);
+                        console.log("Failed to load session: " + file.name);
                     }
                 }
-                await message.reply({ message: `✅ ${loadedCount} sessions successfully load ho gaye!\nAb inpe OTP nahi lagega.` });
+                await message.reply({ message: loadedCount + " sessions successfully load ho gaye!" });
             } catch (e) {
-                await message.reply({ message: "❌ Error: " + e.message });
+                await message.reply({ message: "Error: " + e.message });
             }
         }
 
-        // --- /LOGIN (FRESH OTP) ---
         else if (command === "/login") {
             const phone = args[1];
-            if (!phone) return message.reply({ message: "⚠️ Usage: `/login +91xxxxxxx`" });
-            if (pendingLogins[senderId]) return message.reply({ message: "⚠️ Login already in progress." });
+            if (!phone) return message.reply({ message: "Usage: /login +91xxxxxxx" });
+            if (pendingLogins[senderId]) return message.reply({ message: "Login already in progress." });
 
-            await message.reply({ message: "📡 Connecting..." });
+            await message.reply({ message: "Connecting..." });
             const tempClient = new TelegramClient(new StringSession(""), apiId, apiHash, { connectionRetries: 1 });
             pendingLogins[senderId] = { client: tempClient, phone: phone };
 
             tempClient.start({
                 phoneNumber: phone,
                 phoneCode: async () => {
-                    await message.reply({ message: `📩 OTP Sent.\nReply: \`/otp 12 345\`` });
+                    await message.reply({ message: "OTP Sent. Reply: /otp 12345" });
                     pendingLogins[senderId].otpPromise = new Promise(resolve => pendingLogins[senderId].resolveOtp = resolve);
                     return await pendingLogins[senderId].otpPromise;
                 },
                 password: async () => {
-                    await message.reply({ message: "🔐 2FA Detected. Reply: \`/pass password\`" });
+                    await message.reply({ message: "2FA Detected. Reply: /pass password" });
                     pendingLogins[senderId].passPromise = new Promise(resolve => pendingLogins[senderId].resolvePass = resolve);
                     return await pendingLogins[senderId].passPromise;
                 }
             }).then(async () => {
                 await saveAccount(tempClient, phone, message);
             }).catch(async (err) => {
-                await message.reply({ message: "❌ Login Failed: " + err.message });
+                await message.reply({ message: "Login Failed: " + err.message });
                 delete pendingLogins[senderId];
             });
         }
@@ -185,27 +182,25 @@ async function init() {
             if (pendingLogins[senderId]?.resolvePass) pendingLogins[senderId].resolvePass(args[1]);
         }
 
-        // --- /GETSESSION (DOWNLOAD ZIP) ---
         else if (command === "/getsession") {
             const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.session'));
-            if (files.length === 0) return message.reply({ message: "❌ Koi account nahi hai." });
+            if (files.length === 0) return message.reply({ message: "Koi account nahi hai." });
 
             const zip = new AdmZip();
             for (const file of files) zip.addLocalFile(path.join(sessionDir, file));
             
             await botClient.sendFile(message.chatId, {
                 file: zip.toBuffer(),
-                caption: `🔐 **All Sessions (${files.length})**\n\n⚠️ Isko sambhal ke rakho!`
+                caption: "All Sessions (" + files.length + ")\n\nIsko sambhal ke rakho!"
             });
         }
         
-        // --- /JOINVC ---
         else if (command === "/joinvc") {
             const rawLink = args[1];
-            if (!rawLink) return message.reply({ message: "⚠️ Usage: `/joinvc link`" });
-            if (clients.length === 0) return message.reply({ message: "❌ No accounts loaded." });
+            if (!rawLink) return message.reply({ message: "Usage: /joinvc link" });
+            if (clients.length === 0) return message.reply({ message: "No accounts loaded." });
             
-            await message.reply({ message: `⚡ Deploying ${clients.length} accounts...` });
+            await message.reply({ message: "Deploying " + clients.length + " accounts..." });
             const isPrivate = rawLink.includes('+') || rawLink.includes('joinchat/');
             const cleanLink = extractChatIdentifier(rawLink);
 
@@ -260,12 +255,11 @@ async function init() {
                     }, 10000);
 
                     await new Promise(r => setTimeout(r, joinDelay)); 
-                } catch (e) { console.log(`❌ Acc ${i+1}: ${e.message}`); }
+                } catch (e) { console.log("Acc Error: " + e.message); }
             }
-            await message.reply({ message: "✅ Process Completed!" });
+            await message.reply({ message: "Process Completed!" });
         }
         
-        // --- /LEAVEVC ---
         else if (command === "/leavevc") {
             for (let i = 0; i < clients.length; i++) {
                 try {
@@ -276,13 +270,12 @@ async function init() {
                     }
                 } catch (e) {}
             }
-            await message.reply({ message: "✅ All left VC." });
+            await message.reply({ message: "All left VC." });
         }
 
-        // --- /STATS ---
         else if (command === "/stats") {
             const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.session'));
-            await message.reply({ message: `📊 **Stats**\nTotal Sessions: ${files.length}\nActive Clients: ${clients.length}` });
+            await message.reply({ message: "Stats:\nTotal Sessions: " + files.length + "\nActive Clients: " + clients.length });
         }
         
     }, new NewMessage({ incoming: true }));
@@ -291,11 +284,11 @@ async function init() {
 async function saveAccount(client, phone, message) {
     const sessionStr = client.session.save();
     const cleanPhone = phone.replace(/[^0-9]/g, '');
-    const fileName = `Account ${clients.length + 1} [${cleanPhone}].session`;
+    const fileName = "Account " + (clients.length + 1) + " [" + cleanPhone + "].session";
     fs.writeFileSync(path.join(sessionDir, fileName), sessionStr);
     clients.push(client);
     lastLoginTime = Date.now();
-    await message.reply({ message: `✅ Account linked!\nFile: \`${fileName}\`` });
+    await message.reply({ message: "Account linked!\nFile: " + fileName });
     if (message.senderId) delete pendingLogins[message.senderId.toString()];
 }
 
