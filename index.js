@@ -1,7 +1,7 @@
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   🚫 COPYRIGHT & AUTHORSHIP WARNING 🚫
   Developer: @Dev_Null_X (Telegram)
-  Brand: Node.js India Developers 🇮🇳
+  Brand: Node.js India Developers
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 */
 
@@ -22,8 +22,8 @@ const _0x_dev_null_identity = () => {
     return brand;
 };
 
-app.get('/', (req, res) => res.send(`${_0x_dev_null_identity()} VC Bot is running safely! 🚀`));
-app.listen(port, () => console.log(`[⚡] System active on port ${port}`));
+app.get('/', (req, res) => res.send(_0x_dev_null_identity() + " VC Bot is running safely!"));
+app.listen(port, () => console.log("System active on port " + port));
 
 const { apiId, apiHash, botToken, adminId, joinDelay } = config;
 
@@ -32,6 +32,7 @@ if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir);
 
 let clients = [];
 let pendingLogins = {};
+let waitingForFile = {}; // Track karega kaun file bhej raha hai
 
 const adminFile = "./admins.json";
 let adminList = [];
@@ -75,73 +76,102 @@ async function init() {
     await botClient.start({ botAuthToken: botToken });
     console.log("Control Bot Online!");
 
+    // Helper function for welcome message
+    const getWelcomeMsg = () => {
+        return "Welcome Boss! I am VC Manager.\n\n" +
+               "Admin Commands:\n" +
+               "/login +91xxxx - Add Single Account (OTP)\n" +
+               "/seslog - Upload .session or .zip file to auto-login\n" +
+               "/sescancel - Cancel file upload process\n" +
+               "/getsession - Download all sessions as .zip\n" +
+               "/joinvc [link] - Join All accounts to VC\n" +
+               "/leavevc - Leave All accounts from VC\n" +
+               "/stats - Check active accounts\n\n" +
+               "Developed by @Dev_Null_X";
+    };
+
     botClient.addEventHandler(async (event) => {
         const message = event.message;
-        if (!message || !message.text) return;
+        if (!message) return;
 
         const senderId = message.senderId ? message.senderId.toString() : "unknown";
         if (!adminList.includes(senderId)) return message.reply({ message: "Access Denied!" });
 
+        // Check if user is sending a file after being prompted by /seslog
+        if (waitingForFile[senderId]) {
+            // Agar user cancel karna chahta hai
+            if (message.text && message.text.toLowerCase() === "/sescancel") {
+                delete waitingForFile[senderId];
+                return message.reply({ message: "File upload cancelled successfully." });
+            }
+
+            // Agar message media (file) hai
+            if (message.media && message.media.document) {
+                const fileName = message.media.document.attributes.find(a => a.className === 'DocumentAttributeFilename')?.fileName || "file";
+                
+                if (!fileName.endsWith('.session') && !fileName.endsWith('.zip')) {
+                    return message.reply({ message: "Invalid file. Please send a .session or .zip file, or type /sescancel to cancel." });
+                }
+
+                await message.reply({ message: "File received. Processing... Please wait." });
+                delete waitingForFile[senderId]; // Clear state
+
+                try {
+                    const buffer = await message.downloadMedia();
+                    const filesToLoad = [];
+
+                    if (fileName.endsWith('.session')) {
+                        filesToLoad.push({ name: fileName, data: buffer.toString('utf8') });
+                    } else if (fileName.endsWith('.zip')) {
+                        const zip = new AdmZip(buffer);
+                        for (const entry of zip.getEntries()) {
+                            if (entry.entryName.endsWith('.session')) {
+                                filesToLoad.push({ name: entry.entryName, data: entry.getData().toString('utf8') });
+                            }
+                        }
+                    }
+
+                    let loadedCount = 0;
+                    for (const file of filesToLoad) {
+                        const tempClient = new TelegramClient(new StringSession(file.data.trim()), apiId, apiHash, { connectionRetries: 1 });
+                        try {
+                            await tempClient.connect();
+                            const me = await tempClient.getMe();
+                            const cleanPhone = me.phone ? me.phone.toString() : "Unknown";
+                            const newFileName = "Account " + (clients.length + 1) + " [" + cleanPhone + "].session";
+                            
+                            fs.writeFileSync(path.join(sessionDir, newFileName), tempClient.session.save());
+                            clients.push(tempClient);
+                            loadedCount++;
+                        } catch (e) {}
+                    }
+                    await message.reply({ message: loadedCount + " sessions successfully loaded!" });
+                } catch (e) {
+                    await message.reply({ message: "Error processing file: " + e.message });
+                }
+                return;
+            } else {
+                // Agar file nahi bheji par kuch aur type kar diya
+                return message.reply({ message: "Please send a valid .session or .zip file, or type /sescancel to stop." });
+            }
+        }
+
+        // Normal command handling
+        if (!message.text) return;
         const args = message.text.split(" ");
         const command = args[0].toLowerCase();
 
         if (command === "/start") {
-            await message.reply({ 
-                message: "Welcome Boss!\n\n" +
-                         "/login +91xxxx - Add Single Account (OTP)\n" +
-                         "/seslog - Reply to .session or .zip file to auto-login\n" +
-                         "/getsession - Get all sessions as .zip\n" +
-                         "/joinvc [link] - Join All to VC\n" +
-                         "/leavevc - Leave All VC\n" +
-                         "/stats - Check Stats"
-            });
+            await message.reply({ message: getWelcomeMsg() });
         }
 
         else if (command === "/seslog") {
-            if (!message.media || !message.media.document) {
-                return message.reply({ message: "Reply to a .session or .zip file with /seslog" });
-            }
+            waitingForFile[senderId] = true;
+            await message.reply({ message: "Please send your .session or .zip file now.\n\n(To cancel, type /sescancel)" });
+        }
 
-            const fileName = message.media.document.attributes.find(a => a.className === 'DocumentAttributeFilename')?.fileName || "file";
-            await message.reply({ message: "File process ho rahi hai..." });
-
-            try {
-                const buffer = await message.downloadMedia();
-                const filesToLoad = [];
-
-                if (fileName.endsWith('.session')) {
-                    filesToLoad.push({ name: fileName, data: buffer.toString('utf8') });
-                } else if (fileName.endsWith('.zip')) {
-                    const zip = new AdmZip(buffer);
-                    for (const entry of zip.getEntries()) {
-                        if (entry.entryName.endsWith('.session')) {
-                            filesToLoad.push({ name: entry.entryName, data: entry.getData().toString('utf8') });
-                        }
-                    }
-                } else {
-                    return message.reply({ message: "Sirf .session ya .zip file allowed hai." });
-                }
-
-                let loadedCount = 0;
-                for (const file of filesToLoad) {
-                    const tempClient = new TelegramClient(new StringSession(file.data.trim()), apiId, apiHash, { connectionRetries: 1 });
-                    try {
-                        await tempClient.connect();
-                        const me = await tempClient.getMe();
-                        const cleanPhone = me.phone ? me.phone.toString() : "Unknown";
-                        const newFileName = "Account " + (clients.length + 1) + " [" + cleanPhone + "].session";
-                        
-                        fs.writeFileSync(path.join(sessionDir, newFileName), tempClient.session.save());
-                        clients.push(tempClient);
-                        loadedCount++;
-                    } catch (e) {
-                        console.log("Failed to load session: " + file.name);
-                    }
-                }
-                await message.reply({ message: loadedCount + " sessions successfully load ho gaye!" });
-            } catch (e) {
-                await message.reply({ message: "Error: " + e.message });
-            }
+        else if (command === "/sescancel") {
+            await message.reply({ message: "Nothing to cancel." });
         }
 
         else if (command === "/login") {
@@ -184,23 +214,23 @@ async function init() {
 
         else if (command === "/getsession") {
             const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.session'));
-            if (files.length === 0) return message.reply({ message: "Koi account nahi hai." });
+            if (files.length === 0) return message.reply({ message: "No accounts found to backup." });
 
             const zip = new AdmZip();
             for (const file of files) zip.addLocalFile(path.join(sessionDir, file));
             
             await botClient.sendFile(message.chatId, {
                 file: zip.toBuffer(),
-                caption: "All Sessions (" + files.length + ")\n\nIsko sambhal ke rakho!"
+                caption: "All Sessions (" + files.length + ")\n\nKeep this file safe!"
             });
         }
         
         else if (command === "/joinvc") {
             const rawLink = args[1];
-            if (!rawLink) return message.reply({ message: "Usage: /joinvc link" });
+            if (!rawLink) return message.reply({ message: "Usage: /joinvc https://t.me/link" });
             if (clients.length === 0) return message.reply({ message: "No accounts loaded." });
             
-            await message.reply({ message: "Deploying " + clients.length + " accounts..." });
+            await message.reply({ message: "Deploying " + clients.length + " accounts... This may take time." });
             const isPrivate = rawLink.includes('+') || rawLink.includes('joinchat/');
             const cleanLink = extractChatIdentifier(rawLink);
 
@@ -257,7 +287,7 @@ async function init() {
                     await new Promise(r => setTimeout(r, joinDelay)); 
                 } catch (e) { console.log("Acc Error: " + e.message); }
             }
-            await message.reply({ message: "Process Completed!" });
+            await message.reply({ message: "Process Completed! All accounts joined (if eligible)." });
         }
         
         else if (command === "/leavevc") {
@@ -270,12 +300,12 @@ async function init() {
                     }
                 } catch (e) {}
             }
-            await message.reply({ message: "All left VC." });
+            await message.reply({ message: "All accounts left the Voice Chat." });
         }
 
         else if (command === "/stats") {
             const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.session'));
-            await message.reply({ message: "Stats:\nTotal Sessions: " + files.length + "\nActive Clients: " + clients.length });
+            await message.reply({ message: "System Stats:\nTotal Sessions Saved: " + files.length + "\nActive Clients: " + clients.length + "\nStatus: Secured" });
         }
         
     }, new NewMessage({ incoming: true }));
@@ -288,7 +318,7 @@ async function saveAccount(client, phone, message) {
     fs.writeFileSync(path.join(sessionDir, fileName), sessionStr);
     clients.push(client);
     lastLoginTime = Date.now();
-    await message.reply({ message: "Account linked!\nFile: " + fileName });
+    await message.reply({ message: "Account linked successfully!\nFile saved as: " + fileName });
     if (message.senderId) delete pendingLogins[message.senderId.toString()];
 }
 
